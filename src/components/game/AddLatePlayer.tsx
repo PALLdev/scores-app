@@ -5,6 +5,7 @@ import { Dialog, DialogActions } from "@/components/ui/Dialog"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { MAX_PLAYERS } from "@/lib/constants"
+import { validateName, sanitizeName } from "@/lib/validation"
 
 interface AddLatePlayerProps {
   open: boolean
@@ -25,16 +26,17 @@ export function AddLatePlayer({
   const [error, setError] = useState("")
 
   const handleSubmit = () => {
-    const trimmed = name.trim()
-    if (!trimmed) {
-      setError("Ingresa un nombre")
+    const cleaned = sanitizeName(name)
+    const err = validateName(cleaned)
+    if (err) {
+      setError(err)
       return
     }
     if (currentCount >= maxPlayers) {
       setError(`Máximo ${maxPlayers} jugadores`)
       return
     }
-    onAdd(trimmed)
+    onAdd(cleaned)
     setName("")
     setError("")
     onClose()

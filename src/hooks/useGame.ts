@@ -61,6 +61,11 @@ export function useGame(gameId: string) {
     [store, gameId]
   )
 
+  const deleteGame = useCallback(
+    () => store.deleteGame(gameId),
+    [store, gameId]
+  )
+
   return {
     game,
     standings,
@@ -72,5 +77,6 @@ export function useGame(gameId: string) {
     undoLastRound,
     editRoundScore,
     finishGame,
+    deleteGame,
   }
 }

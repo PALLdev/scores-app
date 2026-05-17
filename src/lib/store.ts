@@ -44,7 +44,9 @@ export const useGameStore = create<GameStore>()(
 
       createGame: (names: string[]) => {
         const id = generateId()
-        const players = names.map((n) => createPlayer(n.trim()))
+        const trimmed = names.map((n) => n.trim()).filter((n) => n.length > 0)
+        if (trimmed.length < 2 || new Set(trimmed).size !== trimmed.length) return ""
+        const players = trimmed.map((n) => createPlayer(n))
         const game: Game = {
           id,
           players,
@@ -62,7 +64,11 @@ export const useGameStore = create<GameStore>()(
         const game = get().games[gameId]
         if (!game || game.players.length >= MAX_PLAYERS) return
 
-        const player = createPlayer(name.trim())
+        const clean = name.trim()
+        if (!clean || clean.length > 30) return
+        if (game.players.some((p) => p.name.toLowerCase() === clean.toLowerCase())) return
+
+        const player = createPlayer(clean)
         const maxScore = Math.max(
           0,
           ...game.players.map((p) =>
@@ -100,6 +106,13 @@ export const useGameStore = create<GameStore>()(
       submitRound: (gameId, roundNumber, scores) => {
         const game = get().games[gameId]
         if (!game) return
+
+        const winners = scores.filter((s) => s.won)
+        if (winners.length !== 1) return
+
+        for (const s of scores) {
+          if (s.points < 0 || s.points > 500) return
+        }
 
         const roundScores: RoundScore[] = scores.map((s) => ({
           playerId: s.playerId,
@@ -150,6 +163,19 @@ export const useGameStore = create<GameStore>()(
         const game = get().games[gameId]
         if (!game) return
 
+        if (points < 0 || points > 500) return
+
+        const round = game.rounds.find((r) => r.roundNumber === roundNumber)
+        if (!round) return
+
+        const updatedScores = round.scores.map((sc) =>
+          sc.playerId === playerId
+            ? { ...sc, points, won, cards: cards?.map((c) => ({ value: c.value, count: c.count })) }
+            : sc
+        )
+        const winners = updatedScores.filter((s) => s.won)
+        if (winners.length !== 1) return
+
         set((s) => ({
           games: {
             ...s.games,
@@ -157,14 +183,7 @@ export const useGameStore = create<GameStore>()(
               ...game,
               rounds: game.rounds.map((r) =>
                 r.roundNumber === roundNumber
-                  ? {
-                      ...r,
-                      scores: r.scores.map((sc) =>
-                        sc.playerId === playerId
-                          ? { ...sc, points, won, cards: cards?.map((c) => ({ value: c.value, count: c.count })) }
-                          : sc
-                      ),
-                    }
+                  ? { ...r, scores: updatedScores }
                   : r
               ),
               updatedAt: Date.now(),

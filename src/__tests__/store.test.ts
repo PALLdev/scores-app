@@ -49,7 +49,7 @@ describe("GameStore", () => {
       for (let r = 1; r <= 10; r++) {
         useGameStore.getState().submitRound(id, r, [
           { playerId: players[0].id, points: r * 5, won: false },
-          { playerId: players[1].id, points: r * 3, won: r === 1 || r === 10 },
+          { playerId: players[1].id, points: r * 3, won: true },
         ])
       }
       const game = useGameStore.getState().games[id]

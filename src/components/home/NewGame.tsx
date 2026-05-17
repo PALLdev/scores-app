@@ -1,37 +1,26 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useGameStore } from "@/lib/store"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Card, CardTitle } from "@/components/ui/Card"
-import { getFinishedGames } from "@/lib/db"
-import type { FinishedGameData } from "@/lib/types"
+import { Dialog, DialogActions } from "@/components/ui/Dialog"
 import { MAX_PLAYERS, MIN_PLAYERS } from "@/lib/constants"
+import { validateName, sanitizeName } from "@/lib/validation"
 
 export function NewGame() {
   const router = useRouter()
-  const { createGame, games } = useGameStore()
+  const { createGame, deleteGame, games } = useGameStore()
   const [names, setNames] = useState<string[]>(["", ""])
   const [error, setError] = useState("")
-
-  const [finishedGames, setFinishedGames] = useState<FinishedGameData[]>([])
-
-  const refreshFinishedGames = useCallback(() => {
-    setFinishedGames(getFinishedGames())
-  }, [])
-
-  useEffect(() => {
-    refreshFinishedGames()
-    window.addEventListener("focus", refreshFinishedGames)
-    return () => window.removeEventListener("focus", refreshFinishedGames)
-  }, [refreshFinishedGames])
-
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const activeGames = Object.values(games).filter((g) => g.status === "in_progress")
 
   const handleNameChange = (index: number, value: string) => {
+    const sanitized = sanitizeName(value)
     const next = [...names]
     next[index] = value
     setNames(next)
@@ -48,10 +37,28 @@ export function NewGame() {
     setNames(names.filter((_, i) => i !== index))
   }
 
+  const handleDeleteConfirm = () => {
+    if (!deleteTarget) return
+    deleteGame(deleteTarget)
+    setDeleteTarget(null)
+  }
+
   const handleSubmit = () => {
-    const filled = names.map((n) => n.trim()).filter(Boolean)
+    const filled = names.map((n) => sanitizeName(n)).filter(Boolean)
     if (filled.length < MIN_PLAYERS) {
       setError(`Mínimo ${MIN_PLAYERS} jugadores`)
+      return
+    }
+    for (const name of filled) {
+      const err = validateName(name)
+      if (err) {
+        setError(err)
+        return
+      }
+    }
+    const unique = new Set(filled)
+    if (unique.size !== filled.length) {
+      setError("Los nombres de los jugadores deben ser únicos")
       return
     }
     const id = createGame(filled)
@@ -75,25 +82,39 @@ export function NewGame() {
           <CardTitle>Partidas en curso</CardTitle>
           <div className="space-y-2 mt-2">
             {activeGames.map((g) => (
-              <Link
+              <div
                 key={g.id}
-                href={`/game/${g.id}`}
-                className="w-full flex items-center justify-between p-3 rounded-xl
-                  bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700
-                  transition-colors text-left no-underline"
+                className="flex items-center gap-2"
               >
-                <div>
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
-                    {g.players.map((p) => p.name).join(", ")}
-                  </span>
-                  <span className="text-xs text-neutral-400 ml-2">
-                    Ronda {g.currentRound}/10
-                  </span>
-                </div>
-                <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
+                <Link
+                  href={`/game/${g.id}`}
+                  className="flex-1 flex items-center justify-between p-3 rounded-xl
+                    bg-neutral-50 hover:bg-neutral-100 dark:bg-neutral-800 dark:hover:bg-neutral-700
+                    transition-colors text-left no-underline"
+                >
+                  <div>
+                    <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                      {g.players.map((p) => p.name).join(", ")}
+                    </span>
+                    <span className="text-xs text-neutral-400 ml-2">
+                      Ronda {g.currentRound}/10
+                    </span>
+                  </div>
+                  <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(g.id)}
+                  className="shrink-0 text-neutral-300 hover:text-red-500 dark:text-neutral-600 dark:hover:text-red-400 transition-colors p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  aria-label="Eliminar partida"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             ))}
           </div>
         </Card>
@@ -148,32 +169,20 @@ export function NewGame() {
         </Button>
       </Card>
 
-      {/* Finished Games History */}
-      {finishedGames.length > 0 && (
-        <Card>
-          <CardTitle>Historial</CardTitle>
-          <div className="space-y-2 mt-2">
-            {finishedGames
-              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-              .slice(0, 10)
-              .map((g) => (
-                <div
-                  key={g.id}
-                  className="flex items-center justify-between p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50"
-                >
-                  <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                    <span className="font-medium text-neutral-900 dark:text-neutral-100">{g.winner}</span>
-                    {" ganó — "}
-                    {g.players.map((p) => `${p.name} (${p.total})`).join(", ")}
-                  </div>
-                  <span className="text-xs text-neutral-400">
-                    {new Date(g.createdAt).toLocaleDateString("es-CL")}
-                  </span>
-                </div>
-              ))}
-          </div>
-        </Card>
-      )}
+      {/* Delete Game Confirmation Dialog */}
+      <Dialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Eliminar partida"
+      >
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+          ¿Estás seguro? Esta partida se eliminará permanentemente. No se puede deshacer.
+        </p>
+        <DialogActions>
+          <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+          <Button variant="danger" onClick={handleDeleteConfirm}>Eliminar partida</Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }

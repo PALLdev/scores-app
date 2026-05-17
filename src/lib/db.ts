@@ -14,9 +14,15 @@ export function getFinishedGames(): FinishedGameData[] {
 
 export function saveFinishedGame(game: FinishedGameData): void {
   if (typeof window === "undefined") return
-  const games = getFinishedGames()
-  games.push(game)
-  localStorage.setItem(DB_PATH, JSON.stringify(games))
+  try {
+    const games = getFinishedGames()
+    games.push(game)
+    // Keep only last 50 finished games to prevent localStorage bloat
+    const trimmed = games.slice(-50)
+    localStorage.setItem(DB_PATH, JSON.stringify(trimmed))
+  } catch {
+    // localStorage might be full or unavailable; silently fail
+  }
 }
 
 export function deleteFinishedGame(id: string): void {

@@ -51,16 +51,40 @@ export function RoundInput({
     setLocalPoints(score?.points ?? 0)
   }, [selectedPlayerIndex, currentPlayer, currentScores])
 
+  const advanceToNextPlayer = useCallback(() => {
+    const nextIndex = players.findIndex((p, i) => {
+      if (i <= selectedPlayerIndex) return false
+      return currentScores[p.id] === undefined
+    })
+    if (nextIndex !== -1) {
+      setSelectedPlayerIndex(nextIndex)
+    } else if (selectedPlayerIndex < players.length - 1) {
+      setSelectedPlayerIndex(selectedPlayerIndex + 1)
+    }
+  }, [players, selectedPlayerIndex, currentScores])
+
   const handleWonToggle = () => {
     if (!currentPlayer) return
     const newWon = !isWon
-    onScoreChange(currentPlayer.id, newWon ? 0 : localPoints, newWon, newWon ? [] : currentScore?.cards)
+    players.forEach((p) => {
+      if (p.id === currentPlayer.id) {
+        onScoreChange(p.id, newWon ? 0 : localPoints, newWon, newWon ? [] : currentScore?.cards)
+      } else if (newWon) {
+        const other = currentScores[p.id]
+        if (other) {
+          onScoreChange(p.id, other.points, false, other.cards)
+        }
+      }
+    })
+    if (newWon) {
+      advanceToNextPlayer()
+    }
   }
 
   const handleCardsChange = useCallback(
     (cards: CardCount[]) => {
       if (!currentPlayer) return
-      const pts = calculateTotal(cards)
+      const pts = Math.min(500, calculateTotal(cards))
       setLocalPoints(pts)
       onScoreChange(currentPlayer.id, pts, false, cards)
     },
@@ -69,12 +93,27 @@ export function RoundInput({
 
   const handleManualChange = (value: number) => {
     if (!currentPlayer) return
-    setLocalPoints(value)
-    onScoreChange(currentPlayer.id, value, false, [])
+    const clamped = Math.max(0, Math.min(500, Math.round(value)))
+    setLocalPoints(clamped)
+    onScoreChange(currentPlayer.id, clamped, false, [])
   }
 
   const allEntered = players.every((p) => currentScores[p.id] !== undefined)
-  const anyEntered = Object.keys(currentScores).length > 0
+  const hasWinner = Object.values(currentScores).some((s) => s.won)
+  const [submitError, setSubmitError] = useState("")
+
+  const handleSubmit = () => {
+    if (!hasWinner) {
+      setSubmitError("Debe seleccionar un ganador para la ronda")
+      return
+    }
+    setSubmitError("")
+    onSubmit()
+  }
+
+  useEffect(() => {
+    setSubmitError("")
+  }, [roundNumber])
 
   return (
     <div className="flex flex-col gap-4">
@@ -160,12 +199,15 @@ export function RoundInput({
         )}
         <Button
           className={`${selectedPlayerIndex < players.length - 1 ? "sm:flex-1" : "w-full"}`}
-          onClick={onSubmit}
+          onClick={handleSubmit}
           disabled={!allEntered}
         >
           {roundNumber >= 10 ? "Finalizar juego" : "Confirmar ronda"}
         </Button>
       </div>
+      {submitError && (
+        <p className="text-xs text-red-500 text-center">{submitError}</p>
+      )}
     </div>
   )
 }

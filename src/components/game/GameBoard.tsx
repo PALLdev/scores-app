@@ -9,6 +9,7 @@ import { ScoreTable } from "./ScoreTable"
 import { RoundInput } from "./RoundInput"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { Dialog, DialogActions } from "@/components/ui/Dialog"
 import type { CardCount, CardValue } from "@/lib/types"
 import { getPlayerTotal } from "@/lib/utils"
 import { saveFinishedGame } from "@/lib/db"
@@ -39,6 +40,7 @@ export function GameBoard({ gameId }: GameBoardProps) {
     { points: number; won: boolean; cards?: CardCount[] }
   >>({})
   const [showAddPlayer, setShowAddPlayer] = useState(false)
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false)
   const [editTarget, setEditTarget] = useState<{
     roundNumber: number
     playerId: string
@@ -94,9 +96,10 @@ export function GameBoard({ gameId }: GameBoardProps) {
     setCurrentScores({})
   }, [game, currentScores, submitRound, currentRound, isLastRound])
 
-  const handleUndo = useCallback(() => {
+  const handleUndoConfirm = useCallback(() => {
     undoLastRound()
     setCurrentScores({})
+    setShowUndoConfirm(false)
   }, [undoLastRound])
 
   const handleEditSave = useCallback(
@@ -157,9 +160,9 @@ export function GameBoard({ gameId }: GameBoardProps) {
           <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wide">
             Puntajes
           </h3>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             {game.rounds.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={handleUndo}>
+              <Button variant="ghost" size="sm" onClick={() => setShowUndoConfirm(true)}>
                 Deshacer
               </Button>
             )}
@@ -232,6 +235,22 @@ export function GameBoard({ gameId }: GameBoardProps) {
           currentCards={editTarget.cards}
         />
       )}
+
+      {/* Undo Confirmation Dialog */}
+      <Dialog
+        open={showUndoConfirm}
+        onClose={() => setShowUndoConfirm(false)}
+        title="Deshacer última ronda"
+      >
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+          ¿Estás seguro? Se eliminarán todos los puntajes de la ronda {game.rounds.length}.
+        </p>
+        <DialogActions>
+          <Button variant="ghost" onClick={() => setShowUndoConfirm(false)}>Cancelar</Button>
+          <Button variant="danger" onClick={handleUndoConfirm}>Deshacer</Button>
+        </DialogActions>
+      </Dialog>
+
     </div>
   )
 }
